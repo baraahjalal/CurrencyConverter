@@ -1,25 +1,22 @@
-﻿using System;
+﻿using CurrencyConverter.Services;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using System.Globalization;
-using System.Text.Json; // 👈 تم إضافة هذا لاستخدام معالجة JSON
-using System.Text.Encodings.Web; // 💡 تم إضافة هذا لدعم الأحرف العربية في JSON
+using System.Text.Json; 
+using System.Text.Encodings.Web;
 
 namespace CurrencyConverter
 {
-    // 💡 تم إعادة هيكلة الكلاس لاستخدام نموذج بيانات شامل (Currency) وإدارة البيانات بملف JSON.
     public static class CurrencyManager
     {
+        // Add references to our dependencies
+        public static IFileSystem FileSystem { get; set; } = new PhysicalFileSystem();
+        public static IDialogService DialogService { get; set; } = new WindowsFormsDialogService();
 
-       
-        //private static readonly string CurrenciesFilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Currencies.json");
-
-
-        //------------------------------------------------------التخزين في الAPP DATA-------------------------
-
-        private static readonly string AppDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "CurrencyConverter_Data");
+        private static string AppDataFolder => FileSystem.GetApplicationDataFolder();
         private static readonly string CurrenciesFilePath = Path.Combine(AppDataFolder, "Currencies.json");
 
 
@@ -44,27 +41,24 @@ namespace CurrencyConverter
         //------------------------------------------------THE LOAD FUNCTION-------------------------------
         public static void LoadCurrencies()
         {
-            //اختبار """"""""""""""المجلد""""""""""""" لحفظ الملفااااات فيه
-            if (!Directory.Exists(AppDataFolder))
+            if (!FileSystem.DirectoryExists(AppDataFolder))
             {
                 try
                 {
-                    Directory.CreateDirectory(AppDataFolder);
+                    FileSystem.CreateDirectory(AppDataFolder);
                 }
                 catch (Exception ex)
                 {
-                    // التعامل مع أي خطأ قد يحدث أثناء إنشاء المجلد (مثل عدم وجود صلاحيات)
-                    MessageBox.Show($"فشل في إنشاء مجلد البيانات: {ex.Message}", "خطأ في النظام", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return; // إيقاف عملية الحفظ
+                    DialogService.ShowMessage($"فشل في إنشاء مجلد البيانات: {ex.Message}", "خطأ في النظام", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return; 
                 }
             }
 
-            //اختبار وجود الملف نفسه
-            if (File.Exists(CurrenciesFilePath))
+            if (FileSystem.FileExists(CurrenciesFilePath))
             {
                 try
                 {
-                    string jsonString = File.ReadAllText(CurrenciesFilePath);
+                    string jsonString = FileSystem.ReadAllText(CurrenciesFilePath);
 
                     // إعدادات إلغاء التسلسل: تسمح بـ camelCase أو PascalCase كأسماء للخصائص
                     var options = new JsonSerializerOptions
@@ -103,21 +97,17 @@ namespace CurrencyConverter
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show($"خطأ في تحميل بيانات العملات من ملف JSON: {ex.Message}", "خطأ في التحميل", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    // في حالة الخطأ، إنشاء قيم افتراضية احتياطية
+                    DialogService.ShowMessage($"خطأ في تحميل بيانات العملات من ملف JSON: {ex.Message}", "خطأ في التحميل", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     InitializeDefaultCurrencies();
                     SaveCurrencies();
                 }
             }
             else
             {
-                // إذا لم يتم العثور على الملف، إنشاء قيم افتراضية وحفظها
                 InitializeDefaultCurrencies();
                 SaveCurrencies();
 
-
-                // 🌟 رسالة توضيحية: الملف تالف/فارغ وتم استخدام الافتراضي 🌟
-                MessageBox.Show(
+                DialogService.ShowMessage(
                     "ملف إعدادات العملات موجود لكنه فارغ أو غير صالح. تم تحميل الإعدادات الافتراضية.",
                     "تحذير بيانات",
                     MessageBoxButtons.OK,
@@ -157,11 +147,11 @@ namespace CurrencyConverter
                 // تسلسل القاموس إلى سلسلة نصية بتنسيق JSON 
                 string jsonString = JsonSerializer.Serialize(Currencies, options);
 
-                File.WriteAllText(CurrenciesFilePath, jsonString);
+                FileSystem.WriteAllText(CurrenciesFilePath, jsonString);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"خطأ في حفظ بيانات العملات: {ex.Message}");
+                DialogService.ShowMessage($"خطأ في حفظ بيانات العملات: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -181,13 +171,12 @@ namespace CurrencyConverter
                     WriteIndented = true,
                     Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                 };
-                // 💡 حفظ القاموس مباشرةً (Currencies)
                 string jsonString = JsonSerializer.Serialize(Currencies, options);
-                File.WriteAllText(filePath, jsonString);
+                FileSystem.WriteAllText(filePath, jsonString);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"خطأ في تصدير العملات إلى JSON: {ex.Message}");
+                DialogService.ShowMessage($"خطأ في تصدير العملات إلى JSON: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -196,7 +185,7 @@ namespace CurrencyConverter
         /// </summary>
         public static void ImportCurrenciesFromJson(string filePath)
         {
-            string jsonString = File.ReadAllText(filePath);
+            string jsonString = FileSystem.ReadAllText(filePath);
 
             // إعدادات إلغاء التسلسل: تسمح بـ camelCase أو PascalCase كأسماء للخصائص
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
@@ -262,23 +251,21 @@ namespace CurrencyConverter
         {
             string code = currencyCode.ToUpper();
 
-            // 1. لا تسمح بحذف العملة الأساسية (LYD)
             if (code == "LYD")
             {
-                MessageBox.Show("لا يمكن حذف العملة الأساسية (LYD).", "عملية مرفوضة", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+                DialogService.ShowMessage("لا يمكن حذف العملة الأساسية (LYD).", "عملية مرفوضة", MessageBoxButtons.OK, MessageBoxIcon.Stop);
                 return false;
             }
 
-            // 2. محاولة الحذف من القاموس
             if (Currencies.ContainsKey(code))
             {
                 Currencies.Remove(code);
-                SaveCurrencies(); // 3. حفظ التغييرات في ملف JSON
+                SaveCurrencies(); 
                 return true;
             }
             else
             {
-                MessageBox.Show($"العملة ذات الرمز {code} غير موجودة للحذف.", "خطأ في الحذف", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogService.ShowMessage($"العملة ذات الرمز {code} غير موجودة للحذف.", "خطأ في الحذف", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return false;
             }
         }
@@ -310,15 +297,12 @@ namespace CurrencyConverter
         {
             try
             {
-                // تنسيق السطر: التاريخ|المبلغ|من|إلى|النتيجة
                 string logLine = $"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")}|{amount}|{from}|{to}|{result}";
-
-                // الكتابة في الملف الافتراضي وإضافة سطر جديد بعد كل عملية
-                File.AppendAllText(HistoryFilePath, logLine + Environment.NewLine);
+                FileSystem.AppendAllText(HistoryFilePath, logLine + Environment.NewLine);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"خطأ في حفظ التاريخ: {ex.Message}");
+                DialogService.ShowMessage($"خطأ في حفظ التاريخ: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -334,11 +318,11 @@ namespace CurrencyConverter
 
             try
             {
-                if (File.Exists(filePath))
+                if (FileSystem.FileExists(filePath))
                 {
-                    string[] lines = File.ReadAllLines(filePath);
+                    string[] lines = FileSystem.ReadAllLines(filePath);
 
-                    foreach (string line in lines.Reverse()) // 💡 قراءة الأحدث أولاً
+                    foreach (string line in lines.Reverse()) 
                     {
                         if (!string.IsNullOrWhiteSpace(line))
                         {
@@ -350,7 +334,7 @@ namespace CurrencyConverter
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"خطأ في تحميل التاريخ من {filePath}: {ex.Message}", "خطأ في التحميل", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                DialogService.ShowMessage($"خطأ في تحميل التاريخ من {filePath}: {ex.Message}", "خطأ في التحميل", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             return historyData;
@@ -364,11 +348,11 @@ namespace CurrencyConverter
                     .Select(parts => string.Join("|", parts))
                     .ToList();
 
-                File.WriteAllLines(savePath, lines);
+                FileSystem.WriteAllLines(savePath, lines);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"خطأ في تصدير التاريخ: {ex.Message}");
+                DialogService.ShowMessage($"خطأ في تصدير التاريخ: {ex.Message}", "خطأ", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
